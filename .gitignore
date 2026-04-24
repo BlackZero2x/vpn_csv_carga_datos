@@ -1,0 +1,49 @@
+# ============================================================
+# Datos sensibles — NUNCA subir al repositorio
+# ============================================================
+
+# Variables de entorno con credenciales y rutas locales
+.env
+
+# Credenciales de Google Cloud (cuenta de servicio)
+*.json
+!csv_mapping.json
+
+# ============================================================
+# Archivos generados en tiempo de ejecución
+# ============================================================
+
+# Logs diarios
+Logs/
+*.log
+
+# CSVs descargados temporalmente
+Data/
+*.csv
+
+# ============================================================
+# Python
+# ============================================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# ============================================================
+# Claude Code (sesión local — no es parte del código fuente)
+# ============================================================
+.claude/
+
+# ============================================================
+# Windows
+# ============================================================
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/

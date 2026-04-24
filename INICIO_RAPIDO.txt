@@ -1,0 +1,222 @@
+# 🚀 INICIO RÁPIDO - VPN CSV Sync
+
+## ¿Qué hace?
+Conecta automáticamente a la VPN a horas fijas (8am, 12pm, 4pm) → Descarga 3 CSVs → Los sube a Google Sheets → Desconecta VPN
+
+**Ventaja:** Tu internet nunca se queda sin acceso. La VPN se conecta, trabaja, y se desconecta automáticamente.
+
+---
+
+## 📦 Archivos que necesitas
+
+Asegúrate de tener estas 4 cosas:
+
+1. **vpn_csv_sync.py** - Script principal (EDITAR CONFIGURACIÓN)
+2. **crear_tareas_windows.bat** - Crea las tareas programadas
+3. **diagnostico_vpn_sync.py** - Verifica que todo funcione
+4. **GUIA_INSTALACION.md** - Documentación completa
+
+---
+
+## 5 PASOS PARA EMPEZAR
+
+### PASO 1: Descargar credenciales de Google (5 minutos)
+
+```
+1. Abre: https://console.cloud.google.com/
+2. Crea nuevo proyecto: "VPN_CSV_Sync"
+3. Ve a APIs → Busca "Google Sheets API" → ENABLE
+4. Ve a Credentials → Create Service Account
+5. Name: "vpn-csv-sync-bot" → CREATE
+6. En la cuenta, pestaña KEYS → Add Key → Create JSON
+7. Se descarga un archivo: "proyecto-123456-abc.json"
+8. Muévelo a: C:\Credentials\google_credentials.json
+```
+
+### PASO 2: Compartir Google Sheet (2 minutos)
+
+```
+1. Abre el Google Sheet donde quieres recibir datos
+2. Share → Pega el email de la service account (está en el JSON)
+3. Copia el ID de la URL: https://docs.google.com/spreadsheets/d/[ESTE_ID]/
+```
+
+### PASO 3: Configurar el script (5 minutos)
+
+**Abre `vpn_csv_sync.py` con Notepad++ o VS Code**
+
+Busca `CONFIG =` (~línea 45) y edita:
+
+```python
+CONFIG = {
+    'vpn_name': 'Palo Alto',              # ← Nombre exacto de tu VPN
+    'vpn_user': 'TU_USUARIO',             # ← Tu usuario VPN
+    'vpn_password': 'TU_CONTRASEÑA',      # ← Tu contraseña VPN
+    
+    'csv_network_path': r'\\SERVIDOR\folder',  # ← Ruta donde están los CSVs
+    
+    'google_credentials_file': r'C:\Credentials\google_credentials.json',
+    'spreadsheet_id': 'ID_COPIADO_ARRIBA',  # ← Pega el ID del Sheet
+    
+    'csv_files': {
+        'archivo1.csv': 'Hoja1',
+        'archivo2.csv': 'Hoja2',
+        'archivo3.csv': 'Hoja3',
+    },
+}
+```
+
+**¿No sabes el nombre de tu VPN?**
+- Abre terminal: `rasdial`
+- Busca algo como "Palo Alto" o "GlobalProtect"
+
+**¿No sabes la ruta del servidor?**
+- Conecta manualmente a VPN
+- Abre File Explorer
+- Prueba: `\\192.168.1.50` (o la IP que te dé el cliente)
+- Navega hasta encontrar los CSVs
+- Copia esa ruta completa
+
+### PASO 4: Verificar que funciona (5 minutos)
+
+**Abre terminal como ADMINISTRADOR** y corre:
+
+```cmd
+cd C:\Data\Scripts
+python vpn_csv_sync.py
+```
+
+Debería ver algo como:
+```
+✓ VPN conectada exitosamente
+✓ Descargado: archivo1.csv (125.5 KB)
+✓ VPN desconectada exitosamente
+✓ Completado: Hoja1 (1250 registros)
+✓ SINCRONIZACIÓN COMPLETADA EXITOSAMENTE
+```
+
+Si hay errores, revisa `C:\Data\Logs\vpn_sync_YYYYMMDD.log`
+
+### PASO 5: Automatizar (2 minutos)
+
+**Haz clic derecho en `crear_tareas_windows.bat` → Ejecutar como administrador**
+
+```
+¿Deseas crear 3 tareas programadas?
+- VPN_CSV_Sync_08AM (08:00)
+- VPN_CSV_Sync_12PM (12:00)
+- VPN_CSV_Sync_04PM (16:00)
+Escribe 'SI' para continuar:
+```
+
+Escribe `SI` y listo. Las 3 tareas se crearán automáticamente.
+
+---
+
+## ✅ Verificar que las tareas funcionan
+
+1. Abre **Task Scheduler** (presiona `Win + R`, escribe `taskschd.msc`)
+2. Busca "VPN_CSV_Sync" en el árbol
+3. Click derecho en una tarea → **Run**
+4. Debería ejecutarse inmediatamente
+5. Revisa `C:\Data\Logs\` para ver que se ejecutó
+
+---
+
+## 🔧 Cambiar horarios
+
+Para cambiar los horarios (en lugar de 8am, 12pm, 4pm):
+
+**Opción 1 (Fácil):**
+1. Abre Task Scheduler
+2. Click derecho en la tarea
+3. Properties → Triggers → Edit → Change time
+
+**Opción 2 (Terminal):**
+```cmd
+schtasks /change /tn "VPN_CSV_Sync_08AM" /st 09:00
+```
+
+---
+
+## ⚠️ Problemas comunes
+
+### "Error conectando VPN"
+- ✓ Verifica el nombre exacto (Settings → Network → VPN)
+- ✓ Prueba conectar manualmente primero
+- ✓ Las credenciales son correctas
+
+### "Archivo CSV no encontrado"
+- ✓ Conecta manualmente a VPN
+- ✓ Abre File Explorer
+- ✓ Pega la ruta: `\\SERVIDOR\folder`
+- ✓ Verifica que los CSVs estén ahí
+
+### "Google Sheets no se actualiza"
+- ✓ El archivo `google_credentials.json` existe en la ruta correcta
+- ✓ Compartiste el Sheet con el email de la service account
+- ✓ El `spreadsheet_id` es correcto
+
+### "Las tareas no se ejecutan"
+- ✓ Abre Task Scheduler y ejecuta manualmente una tarea
+- ✓ Revisa los logs en `C:\Data\Logs\`
+- ✓ Verifica que Python está instalado correctamente
+
+---
+
+## 📋 Checklist antes de ir a producción
+
+- [ ] Python 3.9+ instalado (`python --version`)
+- [ ] Librerías instaladas (`pip install pandas gspread google-auth google-auth-httplib2`)
+- [ ] Credenciales de Google en `C:\Credentials\google_credentials.json`
+- [ ] Google Sheet compartido con la service account
+- [ ] Script `vpn_csv_sync.py` configurado y probado manualmente
+- [ ] Tareas creadas en Task Scheduler
+- [ ] Una ejecución manual fue exitosa
+- [ ] Los logs muestran ✓ en todos los pasos
+
+---
+
+## 📞 Solución de problemas
+
+Si algo no funciona:
+
+1. **Revisa los logs:**
+   ```cmd
+   notepad C:\Data\Logs\vpn_sync_YYYYMMDD.log
+   ```
+
+2. **Ejecuta el diagnóstico:**
+   ```cmd
+   python diagnostico_vpn_sync.py
+   ```
+
+3. **Prueba manualmente:**
+   ```cmd
+   python C:\Data\Scripts\vpn_csv_sync.py
+   ```
+
+4. **Revisa Task Scheduler:**
+   - Historial de la tarea (click derecho → View in Event Viewer)
+
+---
+
+## 🎯 Una vez que funcione
+
+✅ **Ya no necesitas hacer nada más.** El sistema se ejecuta automáticamente cada día.
+
+- 08:00 → Conecta VPN, descarga CSVs, carga a Sheets
+- 12:00 → Lo mismo
+- 16:00 → Lo mismo
+
+Los logs te muestran el historial de ejecuciones en `C:\Data\Logs\`
+
+---
+
+## 📚 Documentación completa
+
+Para detalles, opciones avanzadas y troubleshooting: **GUIA_INSTALACION.md**
+
+---
+
+**¿Dudas? Revisa la guía completa o los logs de ejecución.**
