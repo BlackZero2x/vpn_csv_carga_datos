@@ -15,11 +15,9 @@ echo.
 REM Variables - MODIFICA SI INSTALASTE PYTHON EN OTRA RUTA
 set PYTHON_PATH=C:\Users\%USERNAME%\AppData\Local\Programs\Python\Python314\python.exe
 set SCRIPT_PATH=C:\Scripts\vm_descargar_csvs.py
-set TASK_USER=%COMPUTERNAME%\%USERNAME%
 
 echo Configuracion:
-echo - Horarios: 08:25, 10:25, 12:25, 14:25, 16:25, 18:25, 20:25 (5 min antes que el anfitrion)
-echo - Usuario: %TASK_USER%
+echo - Horarios: 08:25, 10:25, 12:25, 14:25, 16:25, 18:25, 20:25
 echo - Script: %SCRIPT_PATH%
 echo - Python: %PYTHON_PATH%
 echo.
@@ -49,41 +47,33 @@ if /i not "%CONFIRM%"=="SI" (
 )
 
 echo.
-echo Creando tareas...
+echo Creando tareas via PowerShell (requiere elevation)...
 echo.
 
-schtasks /create /tn "VM_CSV_Descarga_0825" /tr "^"%PYTHON_PATH%^" ^"%SCRIPT_PATH%^"" /sc daily /st 08:25 /ru "%COMPUTERNAME%\%USERNAME%" /f
-if errorlevel 1 (echo ERROR creando tarea 08:25) else (echo OK - Tarea 08:25 creada)
-
-schtasks /create /tn "VM_CSV_Descarga_1025" /tr "^"%PYTHON_PATH%^" ^"%SCRIPT_PATH%^"" /sc daily /st 10:25 /ru "%COMPUTERNAME%\%USERNAME%" /f
-if errorlevel 1 (echo ERROR creando tarea 10:25) else (echo OK - Tarea 10:25 creada)
-
-schtasks /create /tn "VM_CSV_Descarga_1225" /tr "^"%PYTHON_PATH%^" ^"%SCRIPT_PATH%^"" /sc daily /st 12:25 /ru "%COMPUTERNAME%\%USERNAME%" /f
-if errorlevel 1 (echo ERROR creando tarea 12:25) else (echo OK - Tarea 12:25 creada)
-
-schtasks /create /tn "VM_CSV_Descarga_1425" /tr "^"%PYTHON_PATH%^" ^"%SCRIPT_PATH%^"" /sc daily /st 14:25 /ru "%COMPUTERNAME%\%USERNAME%" /f
-if errorlevel 1 (echo ERROR creando tarea 14:25) else (echo OK - Tarea 14:25 creada)
-
-schtasks /create /tn "VM_CSV_Descarga_1625" /tr "^"%PYTHON_PATH%^" ^"%SCRIPT_PATH%^"" /sc daily /st 16:25 /ru "%COMPUTERNAME%\%USERNAME%" /f
-if errorlevel 1 (echo ERROR creando tarea 16:25) else (echo OK - Tarea 16:25 creada)
-
-schtasks /create /tn "VM_CSV_Descarga_1825" /tr "^"%PYTHON_PATH%^" ^"%SCRIPT_PATH%^"" /sc daily /st 18:25 /ru "%COMPUTERNAME%\%USERNAME%" /f
-if errorlevel 1 (echo ERROR creando tarea 18:25) else (echo OK - Tarea 18:25 creada)
-
-schtasks /create /tn "VM_CSV_Descarga_2025" /tr "^"%PYTHON_PATH%^" ^"%SCRIPT_PATH%^"" /sc daily /st 20:25 /ru "%COMPUTERNAME%\%USERNAME%" /f
-if errorlevel 1 (echo ERROR creando tarea 20:25) else (echo OK - Tarea 20:25 creada)
+PowerShell -NonInteractive -Command ^
+  "$python = '%PYTHON_PATH%'; $script = '%SCRIPT_PATH%';" ^
+  "$accion = New-ScheduledTaskAction -Execute $python -Argument $script;" ^
+  "$config = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -MultipleInstances IgnoreNew;" ^
+  "foreach ($hora in @('08:25','10:25','12:25','14:25','16:25','18:25','20:25')) {" ^
+  "  $nombre = 'VM_CSV_Descarga_' + $hora.Replace(':','');" ^
+  "  $trigger = New-ScheduledTaskTrigger -Daily -At $hora;" ^
+  "  Register-ScheduledTask -TaskName $nombre -Action $accion -Trigger $trigger -Settings $config -RunLevel Highest -User 'SYSTEM' -Force | Out-Null;" ^
+  "  Write-Host \"OK - $nombre\";" ^
+  "}"
 
 echo.
 echo ============================================================
 echo Tareas creadas en la VM. Cadena completa:
-echo   08:25 VM  ->  08:30 Anfitrion
-echo   10:25 VM  ->  10:30 Anfitrion
-echo   12:25 VM  ->  12:30 Anfitrion
-echo   14:25 VM  ->  14:30 Anfitrion
-echo   16:25 VM  ->  16:30 Anfitrion
-echo   18:25 VM  ->  18:30 Anfitrion
-echo   20:25 VM  ->  20:30 Anfitrion
+echo   08:25 VM  -^>  08:30 Anfitrion
+echo   10:25 VM  -^>  10:30 Anfitrion
+echo   12:25 VM  -^>  12:30 Anfitrion
+echo   14:25 VM  -^>  14:30 Anfitrion
+echo   16:25 VM  -^>  16:30 Anfitrion
+echo   18:25 VM  -^>  18:30 Anfitrion
+echo   20:25 VM  -^>  20:30 Anfitrion
 echo ============================================================
+echo.
+echo Para verificar: PowerShell -Command "Get-ScheduledTask -TaskName 'VM_CSV_Descarga_*'"
 echo.
 
 pause

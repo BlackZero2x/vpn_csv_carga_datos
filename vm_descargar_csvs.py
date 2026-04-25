@@ -8,6 +8,8 @@ import os
 import sys
 import json
 import logging
+import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 from shutil import copy2
@@ -63,6 +65,26 @@ logger = setup_logger()
 # DESCARGA
 # ============================================================================
 
+def _despertar_ruta_unc(ruta: str) -> None:
+    """
+    Fuerza un listado real del directorio UNC para que Windows abandone
+    cualquier caché de la sesión de red dormida. Equivale al F5 manual
+    en el Explorador de archivos.
+    """
+    try:
+        # 'dir' sobre la ruta UNC obliga a Windows a reautenticar la sesión SMB
+        resultado = subprocess.run(
+            ['cmd', '/c', f'dir "{ruta}"'],
+            capture_output=True, text=True, timeout=30
+        )
+        logger.info(f"Wake-up UNC: {resultado.returncode} "
+                    f"({'OK' if resultado.returncode == 0 else resultado.stderr.strip()[:80]})")
+    except subprocess.TimeoutExpired:
+        logger.warning("Wake-up UNC: timeout (30 s) — se continúa de todas formas")
+    except Exception as e:
+        logger.warning(f"Wake-up UNC: {e}")
+
+
 def descargar_csvs() -> bool:
     inicio = datetime.now()
     logger.info("=" * 60)
@@ -70,6 +92,12 @@ def descargar_csvs() -> bool:
     logger.info(f"Origen:  {CONFIG['csv_network_path']}")
     logger.info(f"Destino: {CONFIG['carpeta_destino']}")
     logger.info("=" * 60)
+
+    # Despierta la sesión de red antes de intentar acceder a los archivos.
+    # Sin esto, Windows puede devolver datos cacheados de la última sesión activa.
+    logger.info("Despertando sesión de red corporativa...")
+    _despertar_ruta_unc(CONFIG['csv_network_path'])
+    time.sleep(2)  # Pequeña pausa para que la sesión SMB se estabilice
 
     # Verifica acceso a la red corporativa
     if not Path(CONFIG['csv_network_path']).exists():
@@ -92,6 +120,18 @@ def descargar_csvs() -> bool:
             if not origen.exists():
                 logger.warning(f"✗ No encontrado en red: {archivo}")
                 continue
+
+            # Verifica antigüedad del archivo en la red — alerta si lleva más de 2 h sin cambiar
+            mod_ts = origen.stat().st_mtime
+            antiguedad_min = (datetime.now().timestamp() - mod_ts) / 60
+            if antiguedad_min > 120:
+                logger.warning(
+                    f"⚠ {archivo} no se ha actualizado hace {antiguedad_min:.0f} min "
+                    f"(última modificación: {datetime.fromtimestamp(mod_ts).strftime('%H:%M')}). "
+                    "Puede ser dato cacheado."
+                )
+            else:
+                logger.info(f"Archivo en red actualizado hace {antiguedad_min:.1f} min — OK")
 
             copy2(origen, destino)
 
