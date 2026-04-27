@@ -32,11 +32,11 @@ def _cargar_env(ruta_env: Path) -> None:
         print(f"ERROR: No se encontró .env en {ruta_env}")
         sys.exit(1)
 
-def _cargar_csv_mapping(ruta_json: Path) -> Dict[str, str]:
+def _cargar_csv_mapping(ruta_json: Path) -> tuple[Dict[str, str], Dict[str, str]]:
     try:
         with open(ruta_json, encoding='utf-8') as f:
             datos = json.load(f)
-        return datos['csv_files']
+        return datos['csv_files'], datos['csv_files_diario']
     except FileNotFoundError:
         print(f"ERROR: No se encontró csv_mapping.json en {ruta_json}")
         sys.exit(1)
@@ -46,7 +46,7 @@ def _cargar_csv_mapping(ruta_json: Path) -> Dict[str, str]:
 
 _BASE_DIR = Path(__file__).parent
 _cargar_env(_BASE_DIR / '.env')
-_csv_files = _cargar_csv_mapping(_BASE_DIR / 'csv_mapping.json')
+_csv_files, _csv_files_diario = _cargar_csv_mapping(_BASE_DIR / 'csv_mapping.json')
 
 # Desactiva proxy para llamadas a Google (evita error SSL con proxies corporativos HTTP)
 for _var in ('HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy'):
@@ -58,7 +58,9 @@ CONFIG = {
     'logs_folder':             os.environ['LOGS_FOLDER'],
     'google_credentials_file': os.environ['GOOGLE_CREDENTIALS_FILE'],
     'spreadsheet_id':          os.environ['SPREADSHEET_ID'],
+    'spreadsheet_id_diario':   os.environ.get('SPREADSHEET_ID_DIARIO', ''),
     'csv_files':               _csv_files,
+    'csv_files_diario':        _csv_files_diario,
     'max_retries':             int(os.environ.get('MAX_RETRIES', 2)),
     'retry_delay':             int(os.environ.get('RETRY_DELAY', 5)),
 }
@@ -251,6 +253,41 @@ def cargar_csv_a_sheets(archivo_csv: str, nombre_hoja: str, sh: gspread.Spreadsh
 # FLUJO PRINCIPAL
 # ============================================================================
 
+def _es_primera_ejecucion_del_dia() -> bool:
+    """
+    Devuelve True si hoy no hay ninguna entrada de éxito para el libro diario
+    en el log del día. Permite que BD_Ventas_AUREN.csv se cargue solo una vez.
+    """
+    log_file = Path(CONFIG['logs_folder']) / f"sync_{datetime.now().strftime('%Y%m%d')}.log"
+    if not log_file.exists():
+        return True
+    marcador = 'DIARIO COMPLETADO EXITOSAMENTE'
+    with open(log_file, encoding='utf-8', errors='ignore') as f:
+        return marcador not in f.read()
+
+
+def sincronizar_diario(sh_diario: gspread.Spreadsheet) -> Dict[str, bool]:
+    """
+    Carga al libro diario:
+    - BD_Ventas_AUREN.csv → 'Reportes_ventas_dia'   (solo 1ª ejecución del día)
+    - BD_Ventas_Auren_Por_Hora.csv → 'Reporte_ventas_hora'  (siempre)
+    """
+    resultados: Dict[str, bool] = {}
+    primera = _es_primera_ejecucion_del_dia()
+
+    for archivo_csv, nombre_hoja in CONFIG['csv_files_diario'].items():
+        es_csv_dia = archivo_csv == 'BD_Ventas_AUREN.csv'
+
+        if es_csv_dia and not primera:
+            logger.info(f"Saltando {archivo_csv} → {nombre_hoja} (ya se cargó hoy)")
+            continue
+
+        logger.info(f"\nProcesando [diario]: {archivo_csv} → {nombre_hoja}")
+        resultados[archivo_csv] = cargar_csv_a_sheets(archivo_csv, nombre_hoja, sh_diario)
+
+    return resultados
+
+
 def sincronizar_completo() -> bool:
     inicio = datetime.now()
     logger.info("=" * 60)
@@ -258,27 +295,46 @@ def sincronizar_completo() -> bool:
     logger.info(f"Carpeta compartida: {CONFIG['csv_local_folder']}")
     logger.info("=" * 60)
 
-    # Conectar a Google Sheets
+    # Conectar a Google Sheets principal
     sheets_ok, sh = conectar_google_sheets()
     if not sheets_ok:
-        logger.error("✗ No se pudo conectar a Google Sheets. Abortando.")
+        logger.error("✗ No se pudo conectar a Google Sheets principal. Abortando.")
         return False
 
-    # Subir cada CSV
-    resultados = {}
+    # --- Libro principal: BD_Ventas_Auren_Por_Hora → Altas_MIFIBRA_* (cada ejecución) ---
+    resultados: Dict[str, bool] = {}
     for archivo_csv, nombre_hoja in CONFIG['csv_files'].items():
-        logger.info(f"\nProcesando: {archivo_csv} → {nombre_hoja}")
+        logger.info(f"\nProcesando [principal]: {archivo_csv} → {nombre_hoja}")
         resultados[archivo_csv] = cargar_csv_a_sheets(archivo_csv, nombre_hoja, sh)
+
+    # --- Libro diario: ambos CSVs con su propia lógica de frecuencia ---
+    resultados_diario: Dict[str, bool] = {}
+    if not CONFIG['spreadsheet_id_diario']:
+        logger.warning("⚠ SPREADSHEET_ID_DIARIO no configurado en .env — se omite el libro diario")
+    else:
+        logger.info(f"\nConectando a Google Sheets diario (ID: {CONFIG['spreadsheet_id_diario'][:12]}…)")
+        gc = gspread.service_account(filename=CONFIG['google_credentials_file'])
+        try:
+            sh_diario = gc.open_by_key(CONFIG['spreadsheet_id_diario'])
+            logger.info(f"✓ Conectado al libro diario: {sh_diario.title}")
+            resultados_diario = sincronizar_diario(sh_diario)
+            if resultados_diario and all(resultados_diario.values()):
+                logger.info("✓ DIARIO COMPLETADO EXITOSAMENTE")
+        except gspread.exceptions.SpreadsheetNotFound:
+            logger.error(f"✗ Spreadsheet diario no encontrado (ID: {CONFIG['spreadsheet_id_diario']})")
+        except Exception as e:
+            logger.error(f"✗ Error en libro diario: {e}")
 
     # Reporte final
     tiempo_total = datetime.now() - inicio
-    exitosos = sum(1 for v in resultados.values() if v)
-    total = len(resultados)
+    todos = {**resultados, **{f"[diario] {k}": v for k, v in resultados_diario.items()}}
+    exitosos = sum(1 for v in todos.values() if v)
+    total = len(todos)
 
     logger.info("\n" + "=" * 60)
     logger.info("REPORTE FINAL")
     logger.info("=" * 60)
-    for archivo, ok in resultados.items():
+    for archivo, ok in todos.items():
         logger.info(f"  {'✓' if ok else '✗'} {archivo}")
     logger.info(f"Resultado: {exitosos}/{total} exitosos | Tiempo: {tiempo_total}")
 
@@ -304,6 +360,9 @@ if __name__ == "__main__":
     if campos_vacios:
         logger.error(f"✗ CONFIGURACIÓN INCOMPLETA en .env: {', '.join(campos_vacios)}")
         sys.exit(1)
+
+    if not CONFIG['spreadsheet_id_diario']:
+        logger.warning("⚠ SPREADSHEET_ID_DIARIO vacío en .env — el libro diario no se cargará")
 
     if not CONFIG['csv_files']:
         logger.error("✗ csv_mapping.json no tiene entradas en 'csv_files'")

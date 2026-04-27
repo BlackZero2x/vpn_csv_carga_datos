@@ -28,6 +28,7 @@ CONFIG = {
     # Archivos a copiar (deben coincidir con csv_mapping.json del anfitrión)
     'archivos': [
         'BD_Ventas_Auren_Por_Hora.csv',
+        'BD_Ventas_AUREN.csv',
     ],
 
     # Logs dentro de la carpeta compartida (también visibles desde el anfitrión)

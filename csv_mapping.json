@@ -1,5 +1,9 @@
 {
     "csv_files": {
         "BD_Ventas_Auren_Por_Hora.csv": "Altas_MIFIBRA_Abr26"
+    },
+    "csv_files_diario": {
+        "BD_Ventas_AUREN.csv": "Reportes_ventas_dia",
+        "BD_Ventas_Auren_Por_Hora.csv": "Reporte_ventas_hora"
     }
 }
