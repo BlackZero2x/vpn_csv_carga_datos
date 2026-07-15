@@ -4,15 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Propósito del proyecto
 
-Aplicación de escritorio Windows que automatiza la sincronización de archivos CSV desde un servidor corporativo (accesible por VPN) hacia Google Sheets. El flujo completo es: conectar VPN → descargar CSVs via ruta UNC → desconectar VPN → subir datos a Google Sheets. Se ejecuta mediante tareas programadas de Windows (8:00, 12:00 y 16:00).
+Aplicación de escritorio Windows que automatiza la sincronización de archivos CSV desde un servidor corporativo (accesible por VPN) hacia Google Sheets. El flujo completo es: conectar VPN → descargar CSVs via ruta UNC → desconectar VPN → subir datos a Google Sheets. Se ejecuta mediante tareas programadas de Windows (10:05, 12:30, 14:30, 16:30, 18:30 y 20:30).
 
 ## Dependencias Python
 
-No hay `requirements.txt`. Instalar manualmente:
+Usa el entorno virtual compartido en `C:\proyectos\.venv\`. Las dependencias están en `C:\proyectos\requirements.txt`.
 
 ```bash
-pip install pandas gspread google-auth-oauthlib google-auth-httplib2
+# Instalar si fuera necesario (desde C:\proyectos\)
+pip install pandas gspread google-auth-oauthlib google-auth-httplib2 google-api-python-client
 ```
+
+**Librerías clave**:
+- `gspread`: Cliente para Google Sheets API
+- `google-auth-oauthlib`: OAuth 2.0 flow
+- `google-api-python-client`: Para operaciones de Sheets API (formato, fórmulas)
 
 ## Comandos principales
 
@@ -34,7 +40,7 @@ El proyecto tiene estructura plana con 3 archivos funcionales:
 
 - **`vpn_csv_sync.py`** — Script principal (~502 líneas). La función `sincronizar_completo()` (línea 383) orquesta los 4 pasos del flujo. La configuración está centralizada en el dict `CONFIG` (líneas 25–55) que el usuario debe editar directamente.
 - **`diagnostico_vpn_sync.py`** — Herramienta de diagnóstico (~351 líneas). Ejecuta 7 verificaciones independientes del entorno y genera un reporte final.
-- **`crear_tareas_windows.bat`** — Crea 3 tareas en el Programador de tareas de Windows que ejecutan `vpn_csv_sync.py` a las 08:00, 12:00 y 16:00.
+- **`crear_tareas_windows.bat`** — Crea 6 tareas en el Programador de tareas de Windows que ejecutan `vpn_csv_sync.py` a las 10:05, 12:30, 14:30, 16:30, 18:30 y 20:30.
 
 ### Módulos internos de `vpn_csv_sync.py`
 
@@ -58,14 +64,17 @@ Los valores que el usuario debe configurar son:
 - `spreadsheet_id`: ID del Google Sheets de destino
 - `csv_files`: dict con nombre de archivo → nombre de hoja de destino
 
-## Rutas esperadas en producción
+## Rutas del proyecto
 
 ```
-C:\Data\Scripts\        → copias de los scripts .py y .bat
-C:\Data\CSV_Sync\       → CSVs descargados temporalmente
-C:\Data\Logs\           → logs diarios (vpn_sync_YYYYMMDD.log)
-C:\Credentials\         → google_credentials.json (cuenta de servicio)
+C:\proyectos\VPN_MIFIBRA\          → scripts .py y .bat
+C:\proyectos\VPN_MIFIBRA\.env      → credenciales VPN y configuración sensible
+C:\proyectos\VPN_MIFIBRA\CSV_Sync\ → CSVs descargados temporalmente
+C:\proyectos\VPN_MIFIBRA\logs\     → logs diarios (vpn_sync_YYYYMMDD.log)
+C:\proyectos\shared\credentials\   → google_credentials.json (cuenta de servicio)
 ```
+
+Las credenciales Google se leen desde `.env` (variable `GOOGLE_CREDENTIALS_FILE`). Las credenciales VPN (`vpn_user`, `vpn_password`) también deben migrarse al `.env` para no quedar en texto plano dentro del `CONFIG` de `vpn_csv_sync.py`.
 
 ## Integración con VPN
 
@@ -73,8 +82,26 @@ Usa `rasdial.exe` (herramienta nativa de Windows). Es compatible con conexiones 
 
 ## Google Sheets
 
-Autenticación via cuenta de servicio (no OAuth interactivo). El archivo JSON de credenciales debe obtenerse desde Google Cloud Console. Si una hoja del spreadsheet no existe, se crea automáticamente. Cada sincronización **borra y reescribe** el contenido (modo overwrite). Maneja automáticamente codificaciones UTF-8 y latin-1.
+**Autenticación con OAuth (Recomendado)**
+
+El script intenta usar OAuth primero. Para configurarlo:
+1. Descarga `credentials.json` desde [Google Cloud Console](https://console.cloud.google.com)
+2. Colócalo en `C:\proyectos\VPN_MIFIBRA\`
+3. Ejecuta: `python authenticate_oauth.py`
+4. Autoriza en el navegador que se abre
+
+El token se guarda en `.cache/token.pickle` y se reutiliza automáticamente en futuras ejecuciones.
+
+**Fallback a Cuenta de Servicio**
+
+Si no hay token OAuth válido, el script intenta usar credenciales de cuenta de servicio desde `GOOGLE_CREDENTIALS_FILE` (`.env`). Esto requiere compartir los spreadsheets con la cuenta de servicio.
+
+Ver `OAUTH_SETUP.md` para instrucciones detalladas.
+
+**Características Generales**
+
+Si una hoja del spreadsheet no existe, se crea automáticamente. Cada sincronización **borra y reescribe** el contenido (modo overwrite). Maneja automáticamente codificaciones UTF-8 y latin-1.
 
 ## Logging
 
-Los logs se escriben en consola y en archivo (`C:\Data\Logs\vpn_sync_YYYYMMDD.log`). El sistema de logging se inicializa en las líneas 57–93 de `vpn_csv_sync.py`.
+Los logs se escriben en consola y en archivo (`C:\proyectos\VPN_MIFIBRA\logs\vpn_sync_YYYYMMDD.log`). El sistema de logging se inicializa en las líneas 57–93 de `vpn_csv_sync.py`.
