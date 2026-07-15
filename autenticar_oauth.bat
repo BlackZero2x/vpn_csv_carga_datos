@@ -17,7 +17,7 @@ if not exist "credentials.json" (
     echo Pasos para obtenerlo:
     echo 1. Ve a: https://console.cloud.google.com
     echo 2. Habilita Google Sheets API
-    echo 3. Crea credenciales OAuth ^(tipo: Aplicación de escritorio^)
+    echo 3. Crea credenciales OAuth (tipo: Aplicación de escritorio)
     echo 4. Descarga el archivo JSON
     echo 5. Cópialo aquí y renómbralo a: credentials.json
     echo.
@@ -32,7 +32,7 @@ C:\proyectos\.venv\Scripts\python.exe authenticate_oauth.py
 if %ERRORLEVEL% EQU 0 (
     echo.
     echo ============================================================
-    echo ^✓ AUTENTICACION COMPLETADA
+    echo OK - AUTENTICACION COMPLETADA
     echo ============================================================
     echo.
     echo El token se ha guardado en: .cache\token.pickle
@@ -42,7 +42,7 @@ if %ERRORLEVEL% EQU 0 (
 ) else (
     echo.
     echo ============================================================
-    echo ^✗ ERROR EN LA AUTENTICACION
+    echo ERROR EN LA AUTENTICACION
     echo ============================================================
     echo.
 )

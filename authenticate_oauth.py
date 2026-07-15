@@ -29,7 +29,7 @@ _CREDENTIALS_JSON = _BASE_DIR / 'credentials.json'
 def authenticate():
     """Realiza autenticación OAuth interactiva y guarda el token."""
     if not _CREDENTIALS_JSON.exists():
-        print(f"❌ ERROR: No se encontró {_CREDENTIALS_JSON}")
+        print(f"[ERROR] No se encontró {_CREDENTIALS_JSON}")
         print("\nPasos para obtener credenciales OAuth:")
         print("1. Ve a https://console.cloud.google.com")
         print("2. Crea un nuevo proyecto o selecciona uno existente")
@@ -40,23 +40,27 @@ def authenticate():
 
     _CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    print("🔐 Iniciando autenticación OAuth con Google...")
-    print("Se abrirá una ventana del navegador. Por favor autoriza la aplicación.\n")
+    print("[INFO] Iniciando autenticación OAuth con Google...")
+    print("[INFO] Se abrirá una ventana del navegador. Por favor autoriza la aplicación.\n")
 
-    flow = InstalledAppFlow.from_client_secrets_file(
-        _CREDENTIALS_JSON,
-        _SCOPES,
-        redirect_uri='http://localhost:8080'
-    )
-    creds = flow.run_local_server(port=8080, open_browser=True)
+    try:
+        flow = InstalledAppFlow.from_client_secrets_file(
+            _CREDENTIALS_JSON,
+            _SCOPES,
+            redirect_uri='http://localhost:8080'
+        )
+        creds = flow.run_local_server(port=8080, open_browser=True)
 
-    # Guarda el token para futuras ejecuciones
-    with open(_TOKEN_PICKLE, 'wb') as token:
-        pickle.dump(creds, token)
+        # Guarda el token para futuras ejecuciones
+        with open(_TOKEN_PICKLE, 'wb') as token:
+            pickle.dump(creds, token)
 
-    print(f"\n✅ Autenticación completada!")
-    print(f"✓ Token guardado en: {_TOKEN_PICKLE}")
-    print("\nAhora puedes ejecutar vpn_csv_sync.py normalmente.")
+        print(f"\n[OK] Autenticación completada!")
+        print(f"[OK] Token guardado en: {_TOKEN_PICKLE}")
+        print("\nAhora puedes ejecutar vpn_csv_sync.py normalmente.")
+    except Exception as e:
+        print(f"[ERROR] Autenticación fallida: {e}")
+        sys.exit(1)
 
 if __name__ == '__main__':
     authenticate()
